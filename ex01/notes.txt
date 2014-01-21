@@ -1,3 +1,11 @@
+# Cmake notes
+Out of tree builds (only if no in-tree build exists)
+cmake -DCMAKE_BUILD_TYPE=Debug/Release/RelWithDebInfo
+
+http://cmake.org/Wiki/CMake_Useful_Variables
+
+# Solution notes for excercise 01 (tasks 1-6)
+
 4.25 = 1*2^2 + 0*2^1 + 0*2^0 + 0*2^(-1) + 1*2^(-2)
 4.25 = 100.01 = 1.0001 * 2^2
 
