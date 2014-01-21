@@ -1,0 +1,26 @@
+4.25 = 1*2^2 + 0*2^1 + 0*2^0 + 0*2^(-1) + 1*2^(-2)
+4.25 = 100.01 = 1.0001 * 2^2
+
+0|00000010|0001(0x19)
+
+vector-vector addition
+n
+
+scalar-vector product
+n
+
+matrix-vector product
+n^2+n*(n-1)
+
+equation
+Ax=b
+=> n^2 + 2*n floating point numbers
+
+-> in doubles i.e. 64bits/8bytes per number
+1GB = 2^30B
+
+n^2 + 2n - 2^30 ~= 0
+
+D = 4 + 2^32
+sqrt(D) ~= 2^16
+n ~= 2^15
