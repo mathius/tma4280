@@ -1,4 +1,4 @@
 {
   "name": "Excercises"
-, "files": [ { "directory": ".", "filters": ["*.c", "*.cpp", "*.h", "*.f", "*.f90", "CMakeLists.txt", "Find*.cmake", "notes.txt"], "recursive": 1 } ]
+, "files": [ { "directory": ".", "filters": ["*.c", "*.cpp", "*.h", "*.f", "*.f90", "CMakeLists.txt", "notes.txt"], "recursive": 1 } ]
 }

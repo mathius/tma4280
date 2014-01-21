@@ -4,7 +4,7 @@
 
 using namespace std;
 
-#define N 300
+#define N 3000
 
 int main(int argc, char** argv) {
 	srand(time(NULL));

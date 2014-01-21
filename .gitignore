@@ -1,0 +1,7 @@
+# build directories
+[Dd]ebug*
+[Rr]elease*
+
+# Kate files
+.kateproject.d
+*.kate-swp
