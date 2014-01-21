@@ -1,0 +1,29 @@
+# Solution notes for problem set 02
+
+## Ex 01
+double precision num = 64b = 8B
+L1 (32kB) = 4 096 nums (n=64)
+L2 (1.875MB) = 245 760 nums (n=495)
+L3 (36MB) = 4 718 592 nums (n=2172)
+
+## Ex 02
+?
+
+## Ex 03
+- if n is bigger than L1 cache, data loading slows the operation
+- ops 2, 3 have 2 use 2 arrays, therefore reach cache limits earlier
+- op3 does more operations in about the same time as op1 (pipelinig)
+- op2 has additional data loaging (b)
+
+## Ex04
+- getting used data into cache as soon as possible
+-> Isn't it the same with 3 rows (a,b,c) in cache?
+- x[3n+2] = x[3n] + x[3n+1]
+- vectors may by in different memory places
+
+## questuions
+- ex02?
+- cache behaviour Ex04
+- which mpi implementation? (mpich, openmpi, ...)
+- mpi warnings
+- duration 0?
