@@ -7,7 +7,7 @@ L2 (1.875MB) = 245 760 nums (n=495)
 L3 (36MB) = 4 718 592 nums (n=2172)
 
 ## Ex 02
-?
+- electron speed!
 
 ## Ex 03
 - if n is bigger than L1 cache, data loading slows the operation
@@ -22,8 +22,6 @@ L3 (36MB) = 4 718 592 nums (n=2172)
 - vectors may by in different memory places
 
 ## questuions
-- ex02?
-- cache behaviour Ex04
-- which mpi implementation? (mpich, openmpi, ...)
-- mpi warnings
-- duration 0?
+- cache behaviour Ex04 -> yes, if multi-associative cache (no problem today)
+- which mpi implementation? (mpich, openmpi, ...) -> use mpich, but doesn't matter really (use system default)
+- mpi warnings -> network interface, do not worry

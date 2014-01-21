@@ -1,11 +1,17 @@
 #include <iostream>
 #include <sstream>
 #include <cstdlib>
-#include <ctime>
+#include <sys/time.h>
 
 using namespace std;
 
-#define N 5000
+#define N 500
+
+double wallTime ()
+{
+    struct timeval tmpTime; gettimeofday(&tmpTime,NULL);
+    return tmpTime.tv_sec + tmpTime.tv_usec/1.0e6;
+}
 
 int main(int argc, char** argv) {
     double* x = (double*) malloc(N*sizeof(double));
@@ -16,7 +22,7 @@ int main(int argc, char** argv) {
     double gamma = rand()/RAND_MAX;
     double alpha;
     int i,j;
-    unsigned long before, after;
+    double before, after;
 
     if (x == NULL || y == NULL || a == NULL || b == NULL || matrix == NULL) {
         cerr << "error: Memory allocation failed." << endl;
@@ -34,7 +40,7 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    srand(time(NULL));
+    srand(wallTime());
 
     // initialize numbers
     for (i = 0; i < N; i++) {
@@ -45,7 +51,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    before = time(NULL);
+    before = wallTime();
 
     // compute gamma*b to x, matrix*b to y
     for (i = 0; i < N; i++) {
@@ -70,7 +76,7 @@ int main(int argc, char** argv) {
         alpha += x[i]*y[i];
     }
 
-    after = time(NULL);
+    after = wallTime();
 
     cout << "result: " << alpha << endl;
     cout << "duration: " << (after-before) << endl;
