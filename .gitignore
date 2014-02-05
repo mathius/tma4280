@@ -5,3 +5,6 @@
 # Kate files
 .kateproject.d
 *.kate-swp
+
+# Qt Creator files
+*.user
