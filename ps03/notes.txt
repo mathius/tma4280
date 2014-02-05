@@ -1,0 +1,6 @@
+ps04:
+- partitioning vectors by sending messages?
+- serial, mpi, openmp, mpi+openmp?
+
+- new vs. malloc
+- cmake append
