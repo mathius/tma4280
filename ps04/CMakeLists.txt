@@ -2,7 +2,8 @@ project(ps04)
 enable_language(CXX)
 cmake_minimum_required(VERSION 2.6)
 
-option(ENABLE_MPI "Enable MPI support?" OFF)
+option(ENABLE_MPI "Enable MPI support?" ON)
+option(ENABLE_OPENMP "Enable OpenMP support?" ON)
 
 if(ENABLE_MPI)
   find_package(MPI)
@@ -14,13 +15,21 @@ if(ENABLE_MPI)
   endif()
 endif()
 
+if(ENABLE_OPENMP)
+  find_package(OpenMP)
+  if(OPENMP_FOUND)
+    list(APPEND DEFINITIONS -DHAVE_OPENMP)
+    list(APPEND CXX_FLAGS ${OpenMP_CXX_FLAGS})
+  endif()
+endif()
+
 list(APPEND CMAKE_CXX_FLAGS ${CXX_FLAGS})
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -Wextra")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Wall -O2")
 add_definitions(${DEFINITIONS})
 include_directories(${INCLUDE_PATHS})
 
-set(SRC ps04.cpp algebra.cpp)
+set(SRC ps04.cpp)
 set(EXECUTABLE ps04)
 
 add_executable(${EXECUTABLE} ${SRC})
