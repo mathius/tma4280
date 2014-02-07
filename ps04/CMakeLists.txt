@@ -2,7 +2,7 @@ project(ps04)
 enable_language(CXX)
 cmake_minimum_required(VERSION 2.6)
 
-option(ENABLE_MPI "Enable MPI support?" ON)
+option(ENABLE_MPI "Enable MPI support?" OFF)
 
 if(ENABLE_MPI)
   find_package(MPI)
