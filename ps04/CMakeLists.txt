@@ -1,3 +1,8 @@
+# TMA4280 Supercomputing, Introduction
+# Martin Ukrop (martiu@stud.ntnu.no)
+# problem set 04
+# 2014-02-08
+
 project(ps04)
 enable_language(CXX)
 cmake_minimum_required(VERSION 2.6)

@@ -1,5 +1,9 @@
-#include "ps04.h"
+// TMA4280 Supercomputing, Introduction
+// Martin Ukrop (martiu@stud.ntnu.no)
+// problem set 04
+// 2014-02-08
 
+#include "ps04.h"
 #include <iostream>
 #include <iomanip>
 #include <cstring>
@@ -14,7 +18,7 @@ int main(int argc, char** argv) {
 
     for (unsigned int i = (int) pow(2,3); i < pow(2,15); i *= 2) {
         double computedSum = computeSum(i);
-        if (getMyWorldRank() == 0) {
+        if (worldRank == 0) {
             std::cout << "n: " << std::setw(7) << std::left << i << "diff: " << preciseSum - computedSum << std::endl;
         }
     }
@@ -24,42 +28,43 @@ int main(int argc, char** argv) {
 }
 
 double computeSum(int vectorLength) {
-
-    int localLength = getLocalLength(vectorLength,getMyWorldRank());
+    double* generatedVector = NULL;
     double* receivedData = NULL;
 
-    if (getMyWorldRank() == 0) {
-        // generate vector
-        double* tmpVector = new double[vectorLength];
+    // generate vector
+    // only done by process 0
+    if (worldRank == 0) {
+        generatedVector = new double[vectorLength];
 #pragma omp parallel for schedule(static)
         for (int i = 0; i < vectorLength; i++) {
-            tmpVector[i] = (double) 1 / ((i+1)*(i+1));
+            generatedVector[i] = (double) 1 / ((i+1)*(i+1));
         }
+    }
 
+    // partition vector among processes
 #ifdef HAVE_MPI
-        // spread vector among processes
+    receivedData = new double[getLocalLength(vectorLength,worldRank)];
+    int* counts = new int[worldSize];
+    int* displacements = new int[worldSize];
+    // generate lengths and displacements
 #pragma omp parallel for schedule(static)
-        for (int i = 1; i < getWorldSize(); i++) {
-            MPI::COMM_WORLD.Send(tmpVector + getLocalOffset(vectorLength,i),
-                                 getLocalLength(vectorLength,i),
-                                 MPI::DOUBLE, i, getLocalLength(vectorLength,i));
-        }
-#endif
-        receivedData = tmpVector;
+    for (int i = 0; i < worldSize; i++) {
+        counts[i] = getLocalLength(vectorLength, i);
+        displacements[i] = i * (vectorLength / worldSize) + fmin(vectorLength % worldSize, i);
     }
-
-#ifdef HAVE_MPI
-    // recieve vector parts
-    if (receivedData == NULL) {
-        receivedData = new double[localLength];
-        MPI::COMM_WORLD.Recv(receivedData, localLength, MPI::DOUBLE, 0, localLength);
-    }
+    MPI::COMM_WORLD.Scatterv(generatedVector, counts, displacements, MPI::DOUBLE, receivedData, counts[worldRank], MPI::DOUBLE, 0);
+    delete[] counts;
+    delete[] displacements;
+#else
+    receivedData = generatedVector;
+    generatedVector = NULL;
 #endif
+    delete[] generatedVector;
 
-    // compute sum (starting from smaller numbers)
+    // compute local sum (starting from smaller numbers)
     double sum = 0;
 #pragma omp parallel for schedule(static) reduction(+:sum)
-    for (int i = localLength-1; i >= 0; i--) {
+    for (int i = getLocalLength(vectorLength,worldRank)-1; i >= 0; i--) {
         sum += receivedData[i];
     }
 
@@ -74,70 +79,26 @@ double computeSum(int vectorLength) {
 }
 
 int getLocalLength(int globalLength, int rank) {
-    int length = globalLength / getWorldSize();
-    if (rank < globalLength % getWorldSize()) {
+    int length = globalLength / worldSize;
+    if (rank < globalLength % worldSize) {
         length++;
     }
     return length;
 }
 
-int getLocalOffset(int globalLength, int rank) {
-    int offset = rank * (globalLength / getWorldSize());
-    offset += fmin(globalLength % getWorldSize(), rank);
-    return offset;
-}
-
 void initialize(int argc, char** argv) {
 #ifdef HAVE_MPI
-#ifdef HAVE_OPENMP
-  int aquired = MPI::Init_thread(argc, argv, MPI_THREAD_MULTIPLE);
-  if (getMyWorldRank() == 0) {
-    std::cout << "aquired MPI threading level: ";
-    if (aquired == MPI_THREAD_SINGLE)
-      std::cout << "MPI_THREAD_SINGLE";
-    if (aquired == MPI_THREAD_FUNNELED)
-      std::cout << "MPI_THREAD_FUNNELED";
-    if (aquired == MPI_THREAD_SERIALIZED)
-      std::cout << "MPI_THREAD_SERIALIZED";
-    if (aquired == MPI_THREAD_MULTIPLE)
-      std::cout << "MPI_THREAD_MULTIPLE";
-    std::cout << std::endl;
-  }
+    MPI::Init(argc, argv);
+    worldSize = MPI::COMM_WORLD.Get_size();
+    worldRank = MPI::COMM_WORLD.Get_rank();
 #else
-  MPI::Init(argc, argv);
-#endif
+    worldSize = 1;
+    worldRank = 0;
 #endif
 }
 
 void finalize() {
 #ifdef HAVE_MPI
     MPI::Finalize();
-#endif
-}
-
-int getMyWorldRank() {
-#ifdef HAVE_MPI
-    return MPI::COMM_WORLD.Get_rank();
-#endif
-    return 0;
-}
-
-int getWorldSize() {
-#ifdef HAVE_MPI
-    return MPI::COMM_WORLD.Get_size();
-#endif
-    return 1;
-}
-
-double WallTime ()
-{
-#ifdef HAVE_MPI
-  return MPI_Wtime();
-#elif defined(HAVE_OPENMP)
-  return omp_get_wtime();
-#else
-  struct timeval tmpTime;
-  gettimeofday(&tmpTime,NULL);
-  return tmpTime.tv_sec + tmpTime.tv_usec/1.0e6;
 #endif
 }
