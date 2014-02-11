@@ -8,3 +8,9 @@
 
 # Qt Creator files
 *.user
+
+# LaTeX temporary files
+*.aux
+*.log
+*.synctex.gz
+*.pdf

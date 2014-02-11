@@ -5,7 +5,7 @@
 
 project(ps04)
 enable_language(CXX)
-cmake_minimum_required(VERSION 2.6)
+cmake_minimum_required(VERSION 2.8)
 
 option(ENABLE_MPI "Enable MPI support?" ON)
 option(ENABLE_OPENMP "Enable OpenMP support?" ON)
@@ -14,9 +14,9 @@ if(ENABLE_MPI)
   find_package(MPI)
   if(MPI_FOUND)
     list(APPEND DEFINITIONS -DHAVE_MPI)
-    list(APPEND CXX_FLAGS ${MPI_COMPILE_FLAGS})
-    list(APPEND LIBRARIES ${MPI_LIBRARIES})
-    list(APPEND INCLUDE_PATHS ${MPI_INCLUDE_PATH})
+    list(APPEND CXX_FLAGS ${MPI_CXX_FLAGS})
+    list(APPEND LIBRARIES ${MPI_CXX_LIBRARIES})
+    list(APPEND INCLUDE_PATHS ${MPI_CXX_INCLUDE_PATH})
   endif()
 endif()
 
