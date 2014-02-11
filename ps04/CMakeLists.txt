@@ -14,9 +14,9 @@ if(ENABLE_MPI)
   find_package(MPI)
   if(MPI_FOUND)
     list(APPEND DEFINITIONS -DHAVE_MPI)
-    list(APPEND CXX_FLAGS ${MPI_CXX_FLAGS})
-    list(APPEND LIBRARIES ${MPI_CXX_LIBRARIES})
-    list(APPEND INCLUDE_PATHS ${MPI_CXX_INCLUDE_PATH})
+    list(APPEND CXX_FLAGS ${MPI_COMPILE_FLAGS})
+    list(APPEND LIBRARIES ${MPI_LIBRARIES})
+    list(APPEND INCLUDE_PATHS ${MPI_INCLUDE_PATH})
   endif()
 endif()
 
@@ -39,6 +39,11 @@ set(EXECUTABLE ps04)
 
 add_executable(${EXECUTABLE} ${SRC})
 target_link_libraries(${EXECUTABLE} ${LIBRARIES})
+
+message(STATUS "include paths=${INCLUDE_PATHS}")
+message(STATUS "compile flags=${CMAKE_CXX_FLAGS}")
+message(STATUS "definitions=${DEFINITIONS}")
+message(STATUS "libraries=${LIBRARIES}")
 
 set(MPIEXEC_ARGS -mca btl ^openib)
 
