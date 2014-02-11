@@ -1,7 +1,7 @@
 # TMA4280 Supercomputing, Introduction
 # Martin Ukrop (martiu@stud.ntnu.no)
 # problem set 04
-# 2014-02-08
+# 2014-02-11
 
 project(ps04)
 enable_language(CXX)

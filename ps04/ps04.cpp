@@ -1,7 +1,7 @@
 // TMA4280 Supercomputing, Introduction
 // Martin Ukrop (martiu@stud.ntnu.no)
 // problem set 04
-// 2014-02-08
+// 2014-02-11
 
 #include "ps04.h"
 #include <iostream>
@@ -9,6 +9,9 @@
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
+
+// macro for minimum
+#define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
 
 int main(int argc, char** argv) {
     initialize(argc, argv);
@@ -19,7 +22,7 @@ int main(int argc, char** argv) {
     for (unsigned int i = (int) pow(2,3); i < pow(2,15); i *= 2) {
         double computedSum = computeSum(i);
         if (worldRank == 0) {
-            std::cout << "n: " << std::setw(7) << std::left << i << "diff: " << preciseSum - computedSum << std::endl;
+            std::cout << "n: " << std::setw(7) << std::left << i << "diff: " << (preciseSum - computedSum) << std::endl;
         }
     }
 
@@ -41,7 +44,7 @@ double computeSum(int vectorLength) {
         }
     }
 
-    // partition vector among processes
+// partition vector among processes
 #ifdef HAVE_MPI
     receivedData = new double[getLocalLength(vectorLength,worldRank)];
     int* counts = new int[worldSize];
@@ -50,7 +53,7 @@ double computeSum(int vectorLength) {
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < worldSize; i++) {
         counts[i] = getLocalLength(vectorLength, i);
-        displacements[i] = i * (vectorLength / worldSize) + fmin(vectorLength % worldSize, i);
+        displacements[i] = i * (vectorLength / worldSize) + MIN(vectorLength % worldSize, i);
     }
     MPI::COMM_WORLD.Scatterv(generatedVector, counts, displacements, MPI::DOUBLE, receivedData, counts[worldRank], MPI::DOUBLE, 0);
     delete[] counts;
@@ -68,7 +71,7 @@ double computeSum(int vectorLength) {
         sum += receivedData[i];
     }
 
-    // reduce if needed
+    // reduce if needed (= if using MPI)
 #ifdef HAVE_MPI
     double tmpSum = sum;
     MPI::COMM_WORLD.Reduce(&tmpSum, &sum, 1, MPI::DOUBLE, MPI::SUM, 0);
