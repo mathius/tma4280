@@ -22,7 +22,7 @@ int main(int argc, char** argv) {
     for (unsigned int i = (int) pow(2,3); i < pow(2,15); i *= 2) {
         double computedSum = computeSum(i);
         if (worldRank == 0) {
-            std::cout << "n: " << std::setw(7) << std::left << i << "diff: " << (preciseSum - computedSum) << std::endl;
+            std::cout << "n: " << std::setw(7) << std::left << i << "diff: " << std::setprecision(20) << (preciseSum - computedSum) << std::endl;
         }
     }
 
