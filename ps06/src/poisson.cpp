@@ -17,11 +17,13 @@
 typedef double Real;
 
 /* function prototypes */
-Real *createRealArray (int n);
-Real **createReal2DArray (int m, int n);
-void transpose (Real **bt, Real **b, int m);
-void fst_(Real *v, int *n, Real *w, int *nn);
-void fstinv_(Real *v, int *n, Real *w, int *nn);
+extern "C" {
+  Real *createRealArray (int n);
+  Real **createReal2DArray (int m, int n);
+  void transpose (Real **bt, Real **b, int m);
+  void fst_(Real *v, int *n, Real *w, int *nn);
+  void fstinv_(Real *v, int *n, Real *w, int *nn);
+}
 
 
 int main(int argc, char **argv )
