@@ -14,3 +14,6 @@
 *.log
 *.synctex.gz
 *.pdf
+
+# final submit files
+*.tar.gz
