@@ -1,4 +1,0 @@
-{
-  "name": "Excercises"
-, "files": [ { "directory": ".", "filters": ["*.c", "*.cpp", "*.h", "*.f", "*.f90", "CMakeLists.txt", "notes.txt"], "recursive": 1 } ]
-}

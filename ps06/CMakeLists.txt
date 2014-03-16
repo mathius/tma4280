@@ -1,4 +1,4 @@
-project(poisson)
+project(ps06)
 
 cmake_minimum_required(VERSION 2.8)
 
