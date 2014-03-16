@@ -133,7 +133,7 @@ int main(int argc, char **argv ) {
 
     double startTime = wallTime();
 
-#pragma omp parallel private(myThread)
+#pragma omp parallel private(threadNum)
     {
 #ifdef HAVE_OPENMP
         threadNum = omp_get_thread_num();
