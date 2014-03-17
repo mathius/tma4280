@@ -59,14 +59,14 @@ typedef struct Matrix {
         numCols = new int[worldSize];
         for (int i = 0; i < worldSize; i++) {
             numCols[i] = cols / worldSize;
-            if (worldSize-worldRank < cols%worldSize) {
+            if (worldSize-i <= cols%worldSize) {
                 numCols[i]++;
             }
         }
         localNumCols = numCols[worldRank];
         sendCounts = new int[worldSize];
         for (int i = 0; i < worldSize; i++) {
-            sendCounts[i] = numCols[worldRank]*numCols[i];
+            sendCounts[i] = localNumCols*numCols[i];
         }
         colDispl = new int[worldSize];
         colDispl[0] = 0;
@@ -105,6 +105,17 @@ bool parseArguments(int argc, char** argv, int& n);
 void initialize(int argc, char** argv);
 void finalize();
 double wallTime();
+
+void writeMatrix(Matrix* b) {
+
+    for (int i = 0; i < b->localNumCols; i++) {
+        cout << "#" << MPI::COMM_WORLD.Get_rank() << ": ";
+        for (int j = 0; j < b->rows; j++) {
+            cout << b->data[i][j] << " ";
+        }
+        cout << endl;
+    }
+}
 
 // the total number of grid points in each spatial direction is (n+1)
 // the total number of degrees-of-freedom in each spatial direction is (n-1)
@@ -155,14 +166,13 @@ int main(int argc, char **argv ) {
 #else
         threadNum = 0;
 #endif
-
 #pragma omp for schedule(static) private(i)
-        for (j=0; j < b->rows; j++) {
+        for (i=0; i < b->rows; i++) {
             // compute eigenvalues
-            diag->data[0][j] = 2.*(1.-cos((j+1)*pi/(double)n));
+            diag->data[0][i] = 2.*(1.-cos((i+1)*pi/(double)n));
             // right-side of the equation (h^2*f(j,i))
-            for (i=0; i < b->localNumCols; i++) {
-                b->data[j][i] = h*h*source((j+1.0)/n,(i+1.0)/n);
+            for (j=0; j < b->localNumCols; j++) {
+                b->data[j][i] = h*h*source((j+b->colDispl[b->worldRank]+1.0)/n,(i+1.0)/n);
             }
         }
         // FST on columns
@@ -170,33 +180,41 @@ int main(int argc, char **argv ) {
         for (j=0; j < b->localNumCols; j++) {
             fst_(b->data[j], &n, z->data[threadNum], &nn);
         }
+
         // transposition
         transpose(bt,b);
+
         // inverse FST on rows (columns after transpose)
 #pragma omp for schedule(static)
         for (i=0; i < bt->localNumCols; i++) {
             fstinv_(bt->data[i], &n, z->data[threadNum], &nn);
         }
         // scaling using eigenvalues
+
+//writeMatrix(bt);
 #pragma omp for schedule(static) private(i)
         for (j=0; j < bt->localNumCols; j++) {
             for (i=0; i < bt->rows; i++) {
-                bt->data[j][i] = bt->data[j][i]/(diag->data[0][i]+diag->data[0][j]);
+                bt->data[j][i] = bt->data[j][i]/(diag->data[0][i]+diag->data[0][j+bt->colDispl[bt->worldRank]]);
             }
         }
+//writeMatrix(bt);
         // FST on rows (columns after transpose)
 #pragma omp for schedule(static)
         for (i=0; i < bt->localNumCols; i++) {
             fst_(bt->data[i], &n, z->data[threadNum], &nn);
         }
+//writeMatrix(bt);
         // transposition
         transpose(b,bt);
         // FST on columns
+//        writeMatrix(b);
 #pragma omp for schedule(static)
         for (j=0; j < b->localNumCols; j++) {
             fstinv_(b->data[j], &n, z->data[threadNum], &nn);
         }
     }
+//    writeMatrix(b);
 
     timeEnd = wallTime();
     umax = maxError(b, n);
@@ -222,10 +240,20 @@ void transpose (Matrix* bt, Matrix* b) {
                 memcpy(sendbuf+b->sendDispl[row]+column*b->numCols[row], b->data[column]+b->colDispl[row], b->numCols[row]*sizeof(double));
             }
         }
+////        cout << "##" << MPI::COMM_WORLD.Get_rank() << ": ";
+////        for (int k = 0; k < b->rows*b->localNumCols; k++) {
+////            cout << sendbuf[k] << " ";
+////        }
+//        cout << endl;
 #ifdef HAVE_MPI
 #pragma omp master
         MPI::COMM_WORLD.Alltoallv(sendbuf, b->sendCounts, b->sendDispl, MPI::DOUBLE, recvbuf, b->sendCounts, b->sendDispl, MPI::DOUBLE);
 #endif
+//        cout << "###" << MPI::COMM_WORLD.Get_rank() << ": ";
+//        for (int k = 0; k < b->rows*b->localNumCols; k++) {
+//            cout << recvbuf[k] << " ";
+//        }
+//        cout << endl;
 #pragma omp for schedule(static) private(row)
         for (row = 0; row < b->worldSize; row++) {
             for (column = 0; column < b->numCols[row]; column++) {
@@ -249,7 +277,7 @@ double maxError(Matrix *b, int n) {
     double tmp;
     for (int j=0; j < b->localNumCols; j++) {
         for (int i=0; i < b->rows; i++) {
-            tmp = fabs(b->data[j][i]-exact((j+1.0)/n,(i+1.0)/n));
+            tmp = fabs(b->data[j][i]-exact((j+b->colDispl[b->worldRank]+1.0)/n,(i+1.0)/n));
             if (tmp > umax) umax = tmp;
         }
     }
