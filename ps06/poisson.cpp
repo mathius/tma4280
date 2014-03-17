@@ -129,6 +129,8 @@ double source(double x, double y) {
   return -30.0*pow(y,4)*x*(pow(x,5.0)-1)-30.0*pow(x,4)*y*(pow(y,5)-1);
 }
 
+        double *sendbuf, *recvbuf;
+
 int main(int argc, char **argv ) {
     // initialize MPI
     initialize(argc, argv);
@@ -159,14 +161,14 @@ int main(int argc, char **argv ) {
 
     timeStart = wallTime();
 
-//#pragma omp parallel private(threadNum)
+#pragma omp parallel private(threadNum)
     {
 #ifdef HAVE_OPENMP
         threadNum = omp_get_thread_num();
 #else
         threadNum = 0;
 #endif
-#pragma omp for schedule(static) private(i)
+#pragma omp for schedule(static) private(j)
         for (i=0; i < b->rows; i++) {
             // compute eigenvalues
             diag->data[0][i] = 2.*(1.-cos((i+1)*pi/(double)n));
@@ -180,10 +182,19 @@ int main(int argc, char **argv ) {
         for (j=0; j < b->localNumCols; j++) {
             fst_(b->data[j], &n, z->data[threadNum], &nn);
         }
+}
 
         // transposition
         transpose(bt,b);
+//        writeMatrix(bt);
 
+#pragma omp parallel private(threadNum)
+    {
+#ifdef HAVE_OPENMP
+        threadNum = omp_get_thread_num();
+#else
+        threadNum = 0;
+#endif
         // inverse FST on rows (columns after transpose)
 #pragma omp for schedule(static)
         for (i=0; i < bt->localNumCols; i++) {
@@ -205,9 +216,17 @@ int main(int argc, char **argv ) {
             fst_(bt->data[i], &n, z->data[threadNum], &nn);
         }
 //writeMatrix(bt);
+        }
         // transposition
         transpose(b,bt);
-        // FST on columns
+        // inverse FST on columns
+#pragma omp parallel private(threadNum)
+    {
+#ifdef HAVE_OPENMP
+        threadNum = omp_get_thread_num();
+#else
+        threadNum = 0;
+#endif
 //        writeMatrix(b);
 #pragma omp for schedule(static)
         for (j=0; j < b->localNumCols; j++) {
@@ -229,12 +248,10 @@ int main(int argc, char **argv ) {
 
 void transpose (Matrix* bt, Matrix* b) {
     int row, column, elem;
-
-    if (b->worldSize > 1) {
-        double *sendbuf, *recvbuf;
+    if (b->worldSize >= 1) {
         sendbuf = new double[b->rows*b->localNumCols];
         recvbuf = new double[b->rows*b->localNumCols];
-#pragma omp for schedule(static) private(row)
+#pragma omp parallel for schedule(static) private(row)
         for (column = 0; column < b->localNumCols; column++) {
             for (row = 0; row < b->worldSize; row++) {
                 memcpy(sendbuf+b->sendDispl[row]+column*b->numCols[row], b->data[column]+b->colDispl[row], b->numCols[row]*sizeof(double));
@@ -244,7 +261,7 @@ void transpose (Matrix* bt, Matrix* b) {
 ////        for (int k = 0; k < b->rows*b->localNumCols; k++) {
 ////            cout << sendbuf[k] << " ";
 ////        }
-//        cout << endl;
+        cout << endl;
 #ifdef HAVE_MPI
 #pragma omp master
         MPI::COMM_WORLD.Alltoallv(sendbuf, b->sendCounts, b->sendDispl, MPI::DOUBLE, recvbuf, b->sendCounts, b->sendDispl, MPI::DOUBLE);
@@ -254,7 +271,7 @@ void transpose (Matrix* bt, Matrix* b) {
 //            cout << recvbuf[k] << " ";
 //        }
 //        cout << endl;
-#pragma omp for schedule(static) private(row)
+#pragma omp parallel for schedule(static) private(row)
         for (row = 0; row < b->worldSize; row++) {
             for (column = 0; column < b->numCols[row]; column++) {
                 for (elem = 0; elem < b->localNumCols; elem++) {
