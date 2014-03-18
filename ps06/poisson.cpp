@@ -13,13 +13,16 @@
  * paralelized by Martin Ukrop, 2014
 */
 
-#include <cstddef>
+// the total number of grid points in each spatial direction is (n+1)
+// the total number of degrees-of-freedom in each spatial direction is (n-1)
+// this version requires n to be a power of 2
+
 #include <cstdlib>
 #include <iostream>
 #include <sstream>
-#include <memory.h>
 #include <cmath>
 #include <sys/time.h>
+#include "poisson.h"
 
 #ifdef HAVE_MPI
 #include "mpi.h"
@@ -29,248 +32,127 @@
 #include "omp.h"
 #endif
 
-using namespace std;
+using std::cout;
+using std::cerr;
+using std::endl;
+using std::istringstream;
 
 int threadMax;
 
-typedef struct Matrix {
-    int worldSize;
-    int worldRank;
-    int rows;
-    int cols;
-    int localNumCols;
-    int* numCols;
-    int* colDispl;
-    int* sendDispl;
-    int* sendCounts;
-    double* rawData;
-    double** data;
-    Matrix(int pCols, int pRows, bool mpiDistributed) {
-        worldSize = 1;
-        worldRank = 0;
+Matrix::Matrix(int pCols, int pRows, bool mpiDistributed) {
+    worldSize = 1;
+    worldRank = 0;
 #ifdef HAVE_MPI
-        if (mpiDistributed) {
-            worldSize = MPI::COMM_WORLD.Get_size();
-            worldRank = MPI::COMM_WORLD.Get_rank();
-        }
+    if (mpiDistributed) {
+        worldSize = MPI::COMM_WORLD.Get_size();
+        worldRank = MPI::COMM_WORLD.Get_rank();
+    }
 #endif
-        rows = pRows;
-        cols = pCols;
-        numCols = new int[worldSize];
-        for (int i = 0; i < worldSize; i++) {
-            numCols[i] = cols / worldSize;
-            if (worldSize-i <= cols%worldSize) {
-                numCols[i]++;
-            }
-        }
-        localNumCols = numCols[worldRank];
-        sendCounts = new int[worldSize];
-        for (int i = 0; i < worldSize; i++) {
-            sendCounts[i] = localNumCols*numCols[i];
-        }
-        colDispl = new int[worldSize];
-        colDispl[0] = 0;
-        for (int i = 1; i < worldSize; i++) {
-            colDispl[i] = colDispl[i-1]+numCols[i-1];
-        }
-        sendDispl = new int[worldSize];
-        sendDispl[0] = 0;
-        for (int i = 1; i < worldSize; i++) {
-            sendDispl[i] = sendDispl[i-1]+sendCounts[i-1];
-        }
-        rawData = new double[rows*localNumCols]();
-        data = new double*[localNumCols];
-        for (int i = 0; i < localNumCols; i++) {
-            data[i] = &(rawData[i*rows]);
+    rows = pRows;
+    cols = pCols;
+    numCols = new int[worldSize];
+    for (int i = 0; i < worldSize; i++) {
+        numCols[i] = cols / worldSize;
+        // left-over columns are on the last nodes
+        if (worldSize-i <= cols%worldSize) {
+            numCols[i]++;
         }
     }
-    ~Matrix() {
-        delete[] data;
-        delete[] rawData;
-        delete[] sendCounts;
-        delete[] sendDispl;
-        delete[] numCols;
+    localNumCols = numCols[worldRank];
+    sendCounts = new int[worldSize];
+    for (int i = 0; i < worldSize; i++) {
+        sendCounts[i] = localNumCols*numCols[i];
     }
-} Matrix;
-
-// Sine Transform function prototypes (Fortran, use calling as C)
-extern "C" {
-    void fst_(double *v, int *n, double *w, int *nn);
-    void fstinv_(double *v, int *n, double *w, int *nn);
-}
-
-void transpose(Matrix *bt, Matrix *b);
-double maxError(Matrix* b, int n);
-bool parseArguments(int argc, char** argv, int& n);
-void initialize(int argc, char** argv);
-void finalize();
-double wallTime();
-
-void writeMatrix(Matrix* b) {
-
-    for (int i = 0; i < b->localNumCols; i++) {
-        cout << "#" << MPI::COMM_WORLD.Get_rank() << ": ";
-        for (int j = 0; j < b->rows; j++) {
-            cout << b->data[i][j] << " ";
-        }
-        cout << endl;
+    colDispl = new int[worldSize];
+    colDispl[0] = 0;
+    for (int i = 1; i < worldSize; i++) {
+        colDispl[i] = colDispl[i-1]+numCols[i-1];
+    }
+    sendDispl = new int[worldSize];
+    sendDispl[0] = 0;
+    for (int i = 1; i < worldSize; i++) {
+        sendDispl[i] = sendDispl[i-1]+sendCounts[i-1];
+    }
+    rawData = new double[rows*localNumCols]();
+    data = new double*[localNumCols];
+    for (int i = 0; i < localNumCols; i++) {
+        data[i] = &(rawData[i*rows]);
     }
 }
-
-// the total number of grid points in each spatial direction is (n+1)
-// the total number of degrees-of-freedom in each spatial direction is (n-1)
-// this version requires n to be a power of 2
-
-double exact(double x, double y) {
-  return x*(pow(x,5)-1.0)*y*(pow(y,5)-1.0);
+Matrix::~Matrix() {
+    delete[] data;
+    delete[] rawData;
+    delete[] sendCounts;
+    delete[] sendDispl;
+    delete[] numCols;
+    delete[] colDispl;
 }
-
-double source(double x, double y) {
-  return -30.0*pow(y,4)*x*(pow(x,5.0)-1)-30.0*pow(x,4)*y*(pow(y,5)-1);
-}
-
-        double *sendbuf, *recvbuf;
 
 int main(int argc, char **argv ) {
-    // initialize MPI
     initialize(argc, argv);
+    // problem size (n), general indices (i,j)
+    int i, j, n;
+    double umax, timeStart, timeEnd;
 
-    // problem size (n), matrix dimension(m), tempArray dimesion (nn), general indices (i,j)
-    int i, j, n, m, nn;
-    // solution (b), temp transposed solution (bt)
-    // temp array for FST (z), diagonalisation vector (diag)
-    Matrix *b, *bt, *z, *diag;
+    if (!parseArguments(argc, argv, n)) { return EXIT_FAILURE; }
 
-    double pi, h, umax, timeStart, timeEnd;
-    int threadNum;
-
-    if (!parseArguments(argc, argv, n)) {
-        return EXIT_FAILURE;
-    }
-
-    m  = n-1;
-    nn = 4*n;
-
-    diag = new Matrix(1, m, false);
-    b = new Matrix(m, m, true);
-    bt = new Matrix(m, m, true);
-    z = new Matrix(threadMax, nn, false);
-
-    h    = 1./(double)n;
-    pi   = 4.*atan(1.);
+    double h = 1./(double)n;    // lattice constant
+    double pi   = 4.*atan(1.);  // PI
+    int m  = n-1;               // matrix dimension (degrees-of-freedom)
+    Matrix* diag = new Matrix(1, m, false);         // eigenvalues
+    Matrix* b = new Matrix(m, m, true);             // sight side of the system
+    Matrix* bt = new Matrix(m, m, true);            // tmp for transposition
+    Matrix* z = new Matrix(threadMax, 4*n, false);   // tmp for FST computation
 
     timeStart = wallTime();
 
-#pragma omp parallel private(threadNum)
-    {
-#ifdef HAVE_OPENMP
-        threadNum = omp_get_thread_num();
-#else
-        threadNum = 0;
-#endif
-#pragma omp for schedule(static) private(j)
-        for (i=0; i < b->rows; i++) {
-            // compute eigenvalues
-            diag->data[0][i] = 2.*(1.-cos((i+1)*pi/(double)n));
-            // right-side of the equation (h^2*f(j,i))
-            for (j=0; j < b->localNumCols; j++) {
-                b->data[j][i] = h*h*source((j+b->colDispl[b->worldRank]+1.0)/n,(i+1.0)/n);
-            }
-        }
-        // FST on columns
-#pragma omp for schedule(static)
+    // compute eigenvalues and right-side of the system
+#pragma omp parallel for schedule(static) private(j)
+    for (i=0; i < b->rows; i++) {
+        diag->data[0][i] = 2.*(1.-cos((i+1)*pi/(double)n));
         for (j=0; j < b->localNumCols; j++) {
-            fst_(b->data[j], &n, z->data[threadNum], &nn);
-        }
-}
-
-        // transposition
-        transpose(bt,b);
-//        writeMatrix(bt);
-
-#pragma omp parallel private(threadNum)
-    {
-#ifdef HAVE_OPENMP
-        threadNum = omp_get_thread_num();
-#else
-        threadNum = 0;
-#endif
-        // inverse FST on rows (columns after transpose)
-#pragma omp for schedule(static)
-        for (i=0; i < bt->localNumCols; i++) {
-            fstinv_(bt->data[i], &n, z->data[threadNum], &nn);
-        }
-        // scaling using eigenvalues
-
-//writeMatrix(bt);
-#pragma omp for schedule(static) private(i)
-        for (j=0; j < bt->localNumCols; j++) {
-            for (i=0; i < bt->rows; i++) {
-                bt->data[j][i] = bt->data[j][i]/(diag->data[0][i]+diag->data[0][j+bt->colDispl[bt->worldRank]]);
-            }
-        }
-//writeMatrix(bt);
-        // FST on rows (columns after transpose)
-#pragma omp for schedule(static)
-        for (i=0; i < bt->localNumCols; i++) {
-            fst_(bt->data[i], &n, z->data[threadNum], &nn);
-        }
-//writeMatrix(bt);
-        }
-        // transposition
-        transpose(b,bt);
-        // inverse FST on columns
-#pragma omp parallel private(threadNum)
-    {
-#ifdef HAVE_OPENMP
-        threadNum = omp_get_thread_num();
-#else
-        threadNum = 0;
-#endif
-//        writeMatrix(b);
-#pragma omp for schedule(static)
-        for (j=0; j < b->localNumCols; j++) {
-            fstinv_(b->data[j], &n, z->data[threadNum], &nn);
+            b->data[j][i] = h*h*source((j+b->colDispl[b->worldRank]+1.0)/n,(i+1.0)/n);
         }
     }
-//    writeMatrix(b);
+    fstOnColumns(b, z, false);
+    transpose(bt,b);;
+    fstOnColumns(bt, z, true);
+    // scale according to eigenvalues
+#pragma omp parallel for schedule(static) private(i)
+    for (j=0; j < bt->localNumCols; j++) {
+        for (i=0; i < bt->rows; i++) {
+            bt->data[j][i] = bt->data[j][i]/(diag->data[0][i]+diag->data[0][j+bt->colDispl[bt->worldRank]]);
+        }
+    }
+    fstOnColumns(bt, z, false);
+    transpose(b,bt);
+    fstOnColumns(b, z, true);
 
+    umax = maxError(b, &exact);
     timeEnd = wallTime();
-    umax = maxError(b, n);
 
-    cout << "umax = " << umax << endl;
-    cout << "time = " << (timeEnd-timeStart) << endl;
-
-    // finalize MPI
+    if (masterNode()) {
+        cout << umax << "\t" << (timeEnd-timeStart) << endl;
+    }
     finalize();
     return EXIT_SUCCESS;
 }
 
 void transpose (Matrix* bt, Matrix* b) {
     int row, column, elem;
-    if (b->worldSize >= 1) {
-        sendbuf = new double[b->rows*b->localNumCols];
-        recvbuf = new double[b->rows*b->localNumCols];
+    if (b->worldSize > 1) {
+        double* sendbuf = new double[b->rows*b->localNumCols];
+        double* recvbuf = new double[b->rows*b->localNumCols];
 #pragma omp parallel for schedule(static) private(row)
         for (column = 0; column < b->localNumCols; column++) {
             for (row = 0; row < b->worldSize; row++) {
                 memcpy(sendbuf+b->sendDispl[row]+column*b->numCols[row], b->data[column]+b->colDispl[row], b->numCols[row]*sizeof(double));
             }
         }
-////        cout << "##" << MPI::COMM_WORLD.Get_rank() << ": ";
-////        for (int k = 0; k < b->rows*b->localNumCols; k++) {
-////            cout << sendbuf[k] << " ";
-////        }
-        cout << endl;
 #ifdef HAVE_MPI
 #pragma omp master
         MPI::COMM_WORLD.Alltoallv(sendbuf, b->sendCounts, b->sendDispl, MPI::DOUBLE, recvbuf, b->sendCounts, b->sendDispl, MPI::DOUBLE);
 #endif
-//        cout << "###" << MPI::COMM_WORLD.Get_rank() << ": ";
-//        for (int k = 0; k < b->rows*b->localNumCols; k++) {
-//            cout << recvbuf[k] << " ";
-//        }
-//        cout << endl;
 #pragma omp parallel for schedule(static) private(row)
         for (row = 0; row < b->worldSize; row++) {
             for (column = 0; column < b->numCols[row]; column++) {
@@ -279,6 +161,8 @@ void transpose (Matrix* bt, Matrix* b) {
                 }
             }
         }
+        delete[] sendbuf;
+        delete[] recvbuf;
     } else {
 #pragma omp for schedule(static) private(row)
         for (column=0; column < b->cols; column++) {
@@ -289,12 +173,32 @@ void transpose (Matrix* bt, Matrix* b) {
     }
 }
 
-double maxError(Matrix *b, int n) {
+void fstOnColumns(Matrix* b, Matrix* z, bool inverse) {
+    void (*fstFunction)(double *v, int *n, double *w, int *nn);
+    int threadNum, j;
+    int problemSize = b->rows+1;
+    if (inverse) { fstFunction = &(fstinv_);
+    } else { fstFunction = &(fst_); }
+#pragma omp parallel private(threadNum)
+    {
+#ifdef HAVE_OPENMP
+        threadNum = omp_get_thread_num();
+#else
+        threadNum = 0;
+#endif
+#pragma omp for schedule(static)
+        for (j = 0; j < b->localNumCols; j++) {
+            fstFunction(b->data[j], &problemSize, z->data[threadNum], &(z->rows));
+        }
+    }
+}
+
+double maxError(Matrix *b, double(*exactSolution)(double, double)) {
     double umax = 0.0;
     double tmp;
     for (int j=0; j < b->localNumCols; j++) {
         for (int i=0; i < b->rows; i++) {
-            tmp = fabs(b->data[j][i]-exact((j+b->colDispl[b->worldRank]+1.0)/n,(i+1.0)/n));
+            tmp = fabs(b->data[j][i]-exactSolution((j+b->colDispl[b->worldRank]+1.0)/(b->rows+1),(i+1.0)/(b->rows+1)));
             if (tmp > umax) umax = tmp;
         }
     }
@@ -305,13 +209,14 @@ double maxError(Matrix *b, int n) {
     return umax;
 }
 
-/**
- * @brief check the second argument is a positive power of 2 and parse it to n
- * @param argc  num of arguments
- * @param argv  cli arguments
- * @param n     parsed problem size
- * @return      parsing process success
- */
+bool masterNode() {
+#ifdef HAVE_MPI
+    return (MPI::COMM_WORLD.Get_rank() == 0);
+#else
+    return true;
+#endif
+}
+
 bool parseArguments(int argc, char** argv, int& n) {
     if (argc < 2) {
         cerr << "error: Need a problem size." << endl;
@@ -319,7 +224,7 @@ bool parseArguments(int argc, char** argv, int& n) {
     }
     istringstream ss(argv[1]);
     if (!(ss >> n)) {
-        cerr << "error: Could not parse problem size from '" << string(argv[1]) << "'." << endl;
+        cerr << "error: Could not parse problem size from '" << argv[1] << "'." << endl;
         return false;
     }
     if (n <= 0 || ( n&(n-1) != 0)) {
@@ -329,19 +234,12 @@ bool parseArguments(int argc, char** argv, int& n) {
     return true;
 }
 
-/**
- * @brief initialize MPI/OpenMP, fill global variables, print debug info
- * @param argc  num of arguments
- * @param argv  cli arguments
- */
 void initialize(int argc, char** argv) {
-    int myRank, worldSize;
+    int worldSize;
 #ifdef HAVE_MPI
     MPI::Init(argc, argv);
-    myRank = MPI::COMM_WORLD.Get_rank();
     worldSize = MPI::COMM_WORLD.Get_size();
 #else
-    myRank = 0;
     worldSize = 1;
 #endif
 #ifdef HAVE_OPENMP
@@ -349,15 +247,11 @@ void initialize(int argc, char** argv) {
 #else
     threadMax = 1;
 #endif
-    if (myRank == 0) {
-        cout << "nodes: " << worldSize << endl;
-        cout << "max-threads: " << threadMax << endl;
+    if (masterNode()) {
+        cout << worldSize << "\t" << threadMax << "\t";
     }
 }
 
-/**
- * @brief finalize MPI
- */
 void finalize() {
 #ifdef HAVE_MPI
     MPI::Finalize();

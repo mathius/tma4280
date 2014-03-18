@@ -35,7 +35,7 @@ include_directories(${INCLUDES})
 add_library(common fst.f)
 
 # The C based poisson application
-add_executable(poisson poisson.cpp)
+add_executable(poisson poisson.cpp poisson.h)
 
 # Link to libraries
 target_link_libraries(poisson common ${DEPLIBS_CXX})
