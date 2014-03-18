@@ -21,6 +21,7 @@
 #include <iostream>
 #include <sstream>
 #include <cmath>
+#include <cstring>
 #include <sys/time.h>
 #include "poisson.h"
 
@@ -135,6 +136,10 @@ int main(int argc, char **argv ) {
         cout << umax << "\t" << (timeEnd-timeStart) << endl;
     }
     finalize();
+    delete diag;
+    delete b;
+    delete bt;
+    delete z;
     return EXIT_SUCCESS;
 }
 
