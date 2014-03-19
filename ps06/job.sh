@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Name job 'poisson'
-#PBS -N test-martiu
+#PBS -N poisson-c
 
 # Allocate two nodes with 12 processors from the default resources
-#PBS -lnodes=1:ppn=12:default
+#PBS -lnodes=3:ppn=12:default
 
 # Expect to run up to 5 minutes
 #PBS -lwalltime=00:05:00
@@ -18,9 +18,6 @@
 # Run in the optimist queue by default
 #PBS -q optimist
 
-# Join stdout and stderr output to one file
-#PBS -j oe
-
 # Change directory to dir with the job script
 cd ${PBS_O_WORKDIR}
 
@@ -33,4 +30,4 @@ module load cmake/2.8.7
 KMP_AFFINITY="granularity=fine,compact"
 
 # Run with 8 MPI processes, each with 3 threads
-OMP_NUM_THREADS=3 time mpirun -npernode 4 poisson 4096
+OMP_NUM_THREADS=3 time mpirun -npernode 4 poisson 16384
