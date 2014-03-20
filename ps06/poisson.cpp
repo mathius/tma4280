@@ -96,6 +96,9 @@ int main(int argc, char **argv ) {
     double umax, timeStart, timeEnd;
 
     if (!parseArguments(argc, argv, n)) { return EXIT_FAILURE; }
+    if (masterNode()) {
+        cout << n << "\t";
+    }
 
     double h = 1./(double)n;    // lattice constant
     double pi   = 4.*atan(1.);  // PI

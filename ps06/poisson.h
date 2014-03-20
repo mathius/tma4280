@@ -1,6 +1,13 @@
 #ifndef _POISSON_H_
 #define _POISSON_H_
 
+/*
+ * TMA4280 Supercomputing, Introduction
+ * Problem set 6
+ *
+ * for authors and more info see poisson.cpp
+ */
+
 typedef struct Matrix {
     int worldSize;      //! number of nodes the matrix is distributed across
     int worldRank;      //! rank of this node

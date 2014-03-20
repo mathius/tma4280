@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Name job 'poisson'
-#PBS -N poisson-c
+#PBS -N poisson-b
 
 # Allocate two nodes with 12 processors from the default resources
 #PBS -lnodes=3:ppn=12:default
 
 # Expect to run up to 5 minutes
-#PBS -lwalltime=00:05:00
+#PBS -lwalltime=00:15:00
 
 # Memory per process
 #PBS -lpmem=2000MB
@@ -30,4 +30,4 @@ module load cmake/2.8.7
 KMP_AFFINITY="granularity=fine,compact"
 
 # Run with 8 MPI processes, each with 3 threads
-OMP_NUM_THREADS=3 time mpirun -npernode 4 poisson 16384
+OMP_NUM_THREADS=3 mpirun -npernode 4 poisson 16384
