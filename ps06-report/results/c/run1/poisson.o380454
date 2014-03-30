@@ -1,0 +1,6 @@
+chown: cannot access `/state/partition1/scratch/pbstmp.380454.rocks.hpc.ntnu.no': No such file or directory
+chown: cannot access `/state/partition1/scratch/pbstmp.380454.rocks.hpc.ntnu.no': No such file or directory
+Warning: Permanently added 'compute-1-11' (RSA) to the list of known hosts.
+3	12	1.87611e-09	38.3687
+277.26user 17.80system 0:41.05elapsed 718%CPU (0avgtext+0avgdata 11232032maxresident)k
+0inputs+0outputs (0major+1052748minor)pagefaults 0swaps
